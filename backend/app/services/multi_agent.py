@@ -26,10 +26,7 @@ class AgentState:
 
 
 class MultiAgentResearchSystem:
-    """
-    LangGraph-inspired multi-agent system for autonomous research.
-    Uses a state machine approach with specialized agents.
-    """
+   
     
     def __init__(self, update_callback: Optional[Callable] = None):
         self.client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -38,7 +35,6 @@ class MultiAgentResearchSystem:
         self.model = "gpt-4o"
     
     async def emit_update(self, agent: AgentType, action: str, details: Dict[str, Any]):
-        """Emit an update to the callback (for streaming to frontend)"""
         update = AgentUpdate(
             agent=agent,
             action=action,
@@ -52,9 +48,7 @@ class MultiAgentResearchSystem:
         return update
     
     async def manager_agent(self, state: AgentState) -> AgentState:
-        """
-        Manager Agent: Strategic planning and task decomposition
-        """
+        
         await self.emit_update(
             AgentType.MANAGER,
             "planning",
@@ -86,9 +80,7 @@ Respond in JSON format with EXACTLY this structure - no nesting, no extra keys:
         
         plan_data = json.loads(response.choices[0].message.content)
         
-        # Flatten nested structures if GPT returns them
         if isinstance(plan_data.get('research_questions'), dict):
-            # Extract questions from dict values
             questions = []
             for v in plan_data['research_questions'].values():
                 if isinstance(v, list):
@@ -98,11 +90,9 @@ Respond in JSON format with EXACTLY this structure - no nesting, no extra keys:
             plan_data['research_questions'] = questions
         
         if isinstance(plan_data.get('estimated_sources'), dict):
-            # Get first integer value or sum
             values = [v for v in plan_data['estimated_sources'].values() if isinstance(v, int)]
             plan_data['estimated_sources'] = sum(values) if values else 15
         
-        # Ensure types are correct
         plan_data['research_questions'] = [str(q) for q in plan_data.get('research_questions', [])]
         plan_data['estimated_sources'] = int(plan_data.get('estimated_sources', 15))
         
@@ -120,9 +110,7 @@ Respond in JSON format with EXACTLY this structure - no nesting, no extra keys:
         return state
     
     async def researcher_agent(self, state: AgentState, section_title: str) -> List[Citation]:
-        """
-        Researcher Agent: Collects data from the web
-        """
+       
         await self.emit_update(
             AgentType.RESEARCHER,
             "searching",
@@ -153,16 +141,13 @@ Respond in JSON format with EXACTLY this structure - no nesting, no extra keys:
         section_title: str,
         citations: List[Citation]
     ) -> SectionContent:
-        """
-        Writer Agent: Synthesizes research into coherent content
-        """
+        
         await self.emit_update(
             AgentType.WRITER,
             "writing",
             {"section": section_title, "message": f"Writing section: {section_title}"}
         )
         
-        # Prepare research context
         research_context = "\n\n".join([
             f"Source: {c.title}\nURL: {c.url}\nContent: {c.excerpt}"
             for c in citations
@@ -288,12 +273,10 @@ If quality_score >= 5 and no major issues, set has_issues to false."""
         """
         print(f"[MultiAgent] Starting research for topic: {state.topic}")
         
-        # Step 1: Manager creates plan
         state = await self.manager_agent(state)
         
         print(f"[MultiAgent] Plan approved. Sections: {state.plan.sections}")
         
-        # Step 2: Research and write each section
         for idx, section_title in enumerate(state.plan.sections):
             print(f"[MultiAgent] === Section {idx + 1}/{len(state.plan.sections)}: {section_title} ===")
             
@@ -320,7 +303,6 @@ If quality_score >= 5 and no major issues, set has_issues to false."""
                 print(f"[MultiAgent] Critique Agent: Quality score: {critique.feedback[:100] if critique.feedback else 'No feedback'}...")
                 
                 if critique.has_issues:
-                    # Trigger revision
                     state.needs_revision = True
                     state.revision_feedback = critique.feedback
                     revision_count += 1
@@ -336,7 +318,6 @@ If quality_score >= 5 and no major issues, set has_issues to false."""
                     )
                     print(f"[MultiAgent] Revision {revision_count} requested: {critique.feedback[:100]}...")
                 else:
-                    # Section approved
                     section_approved = True
                     state.sections.append(section)
                     state.needs_revision = False
@@ -344,7 +325,6 @@ If quality_score >= 5 and no major issues, set has_issues to false."""
                     print(f"[MultiAgent] Section '{section_title}' APPROVED!")
             
             if not section_approved:
-                # Max revisions reached, force approve with note
                 state.sections.append(section)
                 state.needs_revision = False
                 state.revision_feedback = ""
@@ -358,7 +338,6 @@ If quality_score >= 5 and no major issues, set has_issues to false."""
                 )
                 print(f"[MultiAgent] Section '{section_title}' approved after max revisions ({state.max_revisions})")
             
-            # Small delay between sections
             await asyncio.sleep(1)
         
         print(f"[MultiAgent] Research complete! {len(state.sections)} sections created.")

@@ -32,7 +32,6 @@ def extract_duckduckgo_url(ddg_url: str) -> str:
 
 
 class WebResearchService:
-    """Service for performing web research and extracting information"""
     
     def __init__(self):
         self.headers = {
@@ -40,10 +39,7 @@ class WebResearchService:
         }
     
     async def search_duckduckgo(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
-        """
-        Search using DuckDuckGo HTML (simplified version)
-        In production, consider using official search APIs
-        """
+        
         results = []
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -76,7 +72,6 @@ class WebResearchService:
         return results
     
     async def extract_content(self, url: str) -> str:
-        """Extract main content from a webpage"""
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(url, headers=self.headers, follow_redirects=True)
@@ -103,7 +98,6 @@ class WebResearchService:
         return ""
     
     async def research_topic(self, query: str, num_sources: int = 3) -> List[Citation]:
-        """Research a topic and return citations with content"""
         search_results = await self.search_duckduckgo(query, max_results=num_sources)
         citations = []
         
@@ -118,7 +112,6 @@ class WebResearchService:
             )
             citations.append(citation)
             
-            # Rate limiting
             await asyncio.sleep(1)
         
         return citations

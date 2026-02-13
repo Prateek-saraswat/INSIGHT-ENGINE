@@ -15,7 +15,6 @@ import cloudinary.uploader
 
 
 class PDFReportService:
-    """Service for generating professional research reports"""
     
     def __init__(self, output_dir: str = None):
         if output_dir is None:
@@ -29,7 +28,6 @@ class PDFReportService:
         self._configure_cloudinary()
     
     def _configure_cloudinary(self):
-        """Configure Cloudinary from environment variables"""
         try:
             cloud_name = settings.cloudinary_cloud_name
             api_key = settings.cloudinary_api_key
@@ -51,7 +49,6 @@ class PDFReportService:
             print(f"[PDFService] Cloudinary configuration error: {e}")
     
     def _format_datetime(self, dt_value):
-        """Safely format a datetime value to string"""
         if dt_value is None:
             return datetime.utcnow().strftime('%B %d, %Y')
         if isinstance(dt_value, str):
@@ -65,7 +62,6 @@ class PDFReportService:
             return str(dt_value)
     
     def upload_to_cloudinary(self, filepath: str, session_id: str) -> str:
-        """Upload PDF to Cloudinary and return the URL"""
         if not self.cloudinary_configured:
             print(f"[PDFService] Cloudinary not configured, skipping upload")
             return None
@@ -92,7 +88,6 @@ class PDFReportService:
         sections: List[SectionContent],
         session_id: str
     ) -> str:
-        """Generate a complete research report PDF"""
         
         filename = f"research_report_{session_id}.pdf"
         filepath = os.path.join(self.output_dir, filename)
@@ -103,7 +98,6 @@ class PDFReportService:
         story = []
         styles = getSampleStyleSheet()
         
-        # Custom styles
         title_style = ParagraphStyle(
             'CustomTitle',
             parent=styles['Heading1'],
@@ -130,7 +124,6 @@ class PDFReportService:
             spaceAfter=12
         )
         
-        # Title page
         story.append(Spacer(1, 1.5*inch))
         story.append(Paragraph(topic, title_style))
         story.append(Spacer(1, 0.3*inch))
@@ -144,7 +137,6 @@ class PDFReportService:
         story.append(Paragraph(f"Session ID: {session_id}", styles['Normal']))
         story.append(PageBreak())
         
-        # Executive Summary
         story.append(Paragraph("Executive Summary", heading_style))
         summary_text = f"This report presents comprehensive research on {topic}. "
         summary_text += f"The analysis is organized into {len(sections)} thematic sections, "
@@ -152,19 +144,16 @@ class PDFReportService:
         story.append(Paragraph(summary_text, body_style))
         story.append(Spacer(1, 0.3*inch))
         
-        # Table of Contents
         story.append(Paragraph("Table of Contents", heading_style))
         for i, section in enumerate(sections, 1):
             story.append(Paragraph(f"{i}. {section.title}", styles['Normal']))
         story.append(Spacer(1, 0.2*inch))
         story.append(PageBreak())
         
-        # Sections
         all_citations = []
         for i, section in enumerate(sections, 1):
             story.append(Paragraph(f"{i}. {section.title}", heading_style))
             
-            # Section content
             paragraphs = section.content.split('\n\n')
             for para in paragraphs:
                 if para.strip():
@@ -172,22 +161,17 @@ class PDFReportService:
             
             story.append(Spacer(1, 0.2*inch))
             
-            # Collect citations
             if section.citations:
                 all_citations.extend(section.citations)
         
         print(f"[PDFService] Generated PDF with {len(all_citations)} total citations")
         
-        # References
         story.append(PageBreak())
         story.append(Paragraph("References", heading_style))
         
-        # Deduplicate citations by URL
         unique_citations = {}
         
-        # Handle both Citation objects and dicts
         for citation in all_citations:
-            # Convert dict to object if needed
             if isinstance(citation, dict):
                 url = citation.get('url', '')
                 title = citation.get('title', 'Unknown')
@@ -202,7 +186,6 @@ class PDFReportService:
                     'accessed_at': self._format_datetime(citation.get('accessed_at') if isinstance(citation, dict) else citation.accessed_at)
                 }
         
-        # Check if we have any citations
         if not unique_citations:
             story.append(Paragraph("No references available.", styles['Normal']))
         else:
@@ -213,7 +196,6 @@ class PDFReportService:
                 story.append(Paragraph(ref_text, styles['Normal']))
                 story.append(Spacer(1, 0.15*inch))
         
-        # Build PDF
         doc.build(story)
         
         return filepath

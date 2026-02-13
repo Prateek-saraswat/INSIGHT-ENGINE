@@ -16,7 +16,6 @@ from datetime import datetime
 
 
 def serialize_datetime(obj):
-    """Custom serializer for datetime objects"""
     if isinstance(obj, datetime):
         return obj.isoformat()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
@@ -25,7 +24,6 @@ router = APIRouter(prefix="/api/research", tags=["research"])
 
 
 def get_research_service(db: AsyncIOMotorDatabase = Depends(get_database)) -> ResearchService:
-    """Dependency to get research service"""
     return ResearchService(db)
 
 
@@ -35,10 +33,6 @@ async def start_research(
     background_tasks: BackgroundTasks,
     service: ResearchService = Depends(get_research_service)
 ):
-    """
-    Start a new research session.
-    Creates the session and kicks off the multi-agent workflow in the background.
-    """
     # Create session
     session = await service.create_session(request)
     
@@ -57,7 +51,6 @@ async def get_session(
     session_id: str,
     service: ResearchService = Depends(get_research_service)
 ):
-    """Get details of a research session"""
     session = await service.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -69,7 +62,6 @@ async def approve_plan(
     approval: ApprovalRequest,
     service: ResearchService = Depends(get_research_service)
 ):
-    """Approve or reject a research plan"""
     session = await service.get_session(approval.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

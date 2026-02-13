@@ -9,20 +9,17 @@ import re
 
 
 def get_password_hash(password: str) -> str:
-    """Hash password using bcrypt"""
     password_bytes = password.encode('utf-8')
     return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
     password_bytes = plain_password.encode('utf-8')
     hashed_bytes = hashed_password.encode('utf-8')
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
 def validate_email(email: str) -> bool:
-    """Validate email format"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
@@ -93,7 +90,6 @@ class AuthService:
         return user, token
     
     async def authenticate_user(self, user_data: UserLogin) -> tuple[User, str]:
-        # Validate email format
         if not validate_email(user_data.email):
             raise ValueError("Invalid email format")
         
@@ -102,7 +98,6 @@ class AuthService:
         if not user_doc:
             raise ValueError("Invalid email or password")
         
-        # Convert ObjectId to string for id field
         user_doc['id'] = str(user_doc['_id'])
         user = User(**user_doc)
         

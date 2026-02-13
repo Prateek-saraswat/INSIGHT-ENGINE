@@ -18,7 +18,6 @@ async def register(
     user_data: UserCreate,
     service: AuthService = Depends(get_auth_service)
 ):
-    """Register a new user"""
     try:
         user, token = await service.create_user(user_data)
         # Use the id from the returned user object
@@ -41,7 +40,6 @@ async def login(
     user_data: UserLogin,
     service: AuthService = Depends(get_auth_service)
 ):
-    """Login with email and password"""
     try:
         user, token = await service.authenticate_user(user_data)
         return Token(
@@ -62,7 +60,6 @@ async def get_current_user(
     service: AuthService = Depends(get_auth_service),
     token: str = None
 ):
-    """Get current user from token"""
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
@@ -84,5 +81,4 @@ async def get_current_user(
 
 @router.post("/logout")
 async def logout():
-    """Logout user (client-side token removal)"""
     return {"message": "Logged out successfully"}

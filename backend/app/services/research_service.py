@@ -12,7 +12,6 @@ import asyncio
 
 
 class ResearchService:
-    """Service for managing research sessions and orchestrating the multi-agent system"""
     
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
@@ -20,7 +19,6 @@ class ResearchService:
         self.pdf_service = PDFReportService()
     
     async def create_session(self, request: ResearchRequest) -> ResearchSession:
-        """Create a new research session"""
         session = ResearchSession(
             user_id=request.user_id,
             topic=request.topic,
@@ -33,7 +31,6 @@ class ResearchService:
         return session
     
     async def get_session(self, session_id: str) -> Optional[ResearchSession]:
-        """Retrieve a research session"""
         try:
             data = await self.sessions.find_one({"_id": ObjectId(session_id)})
             if not data:
@@ -42,14 +39,12 @@ class ResearchService:
             
             data["_id"] = str(data["_id"])
             
-            # Convert status string to enum if needed
             if isinstance(data.get('status'), str):
                 try:
                     data['status'] = ResearchStatus(data['status'])
                 except ValueError:
                     data['status'] = ResearchStatus.PENDING
             
-            # Convert datetime strings back to datetime objects
             for field in ['created_at', 'updated_at', 'completed_at']:
                 if data.get(field) and isinstance(data[field], str):
                     try:
@@ -57,7 +52,6 @@ class ResearchService:
                     except (ValueError, TypeError):
                         data[field] = datetime.utcnow()
             
-            # Convert agent_update timestamps
             if data.get('agent_updates'):
                 for update in data['agent_updates']:
                     if isinstance(update.get('timestamp'), str):
@@ -66,7 +60,6 @@ class ResearchService:
                         except (ValueError, TypeError):
                             update['timestamp'] = datetime.utcnow()
             
-            # Convert section citation datetimes
             if data.get('sections'):
                 for section in data['sections']:
                     if section.get('citations'):
@@ -77,7 +70,6 @@ class ResearchService:
                                 except (ValueError, TypeError):
                                     cit['accessed_at'] = datetime.utcnow()
             
-            # Debug: Print section and citation count
             sections = data.get('sections', [])
             total_citations = sum(len(s.get('citations', [])) for s in sections)
             print(f"[ResearchService] Loaded session {session_id}: {len(sections)} sections, {total_citations} citations")
@@ -103,7 +95,6 @@ class ResearchService:
     
     async def add_agent_update(self, session_id: str, update: AgentUpdate):
         """Add an agent update to the session"""
-        # Convert datetime to string for MongoDB
         update_dict = update.dict()
         update_dict['timestamp'] = update_dict['timestamp'].isoformat()
         
@@ -143,11 +134,9 @@ class ResearchService:
     
     async def save_sections(self, session_id: str, sections: list):
         """Save completed sections"""
-        # Convert sections to dicts with proper datetime handling
         sections_data = []
         for s in sections:
             section_dict = s.dict()
-            # Convert citation datetimes
             if section_dict.get('citations'):
                 for cit in section_dict['citations']:
                     if isinstance(cit.get('accessed_at'), datetime):
@@ -185,10 +174,7 @@ class ResearchService:
         session_id: str,
         update_callback: Optional[Callable] = None
     ):
-        """
-        Execute the full research workflow with multi-agent system.
-        This runs asynchronously in the background.
-        """
+       
         try:
             session = await self.get_session(session_id)
             if not session:
@@ -198,31 +184,25 @@ class ResearchService:
             print(f"[ResearchService] Starting research for session {session_id}")
             print(f"[ResearchService] Topic: {session.topic}")
             
-            # Update status
             await self.update_session_status(session_id, ResearchStatus.PLANNING)
             print(f"[ResearchService] Status: PLANNING")
             
-            # Create callback wrapper that saves updates to DB
             async def wrapped_callback(update: AgentUpdate):
                 print(f"[AgentUpdate] {update.agent.value}: {update.action} - {update.details.get('message', '')}")
                 await self.add_agent_update(session_id, update)
                 if update_callback:
                     await update_callback(update)
             
-            # Initialize multi-agent system
             agent_system = MultiAgentResearchSystem(update_callback=wrapped_callback)
             state = AgentState(topic=session.topic)
             
-            # Step 1: Create plan
             print(f"[ResearchService] Manager Agent: Creating plan...")
             state = await agent_system.manager_agent(state)
             print(f"[ResearchService] Plan created with {len(state.plan.sections)} sections")
             
-            # Save plan and wait for approval
             await self.save_plan(session_id, state.plan.dict())
             print(f"[ResearchService] Plan created! Waiting for user approval...")
             
-            # Wait for approval (polling approach)
             max_wait = 3600  # 1 hour timeout
             waited = 0
             while waited < max_wait:
@@ -240,16 +220,13 @@ class ResearchService:
                 await self.update_session_status(session_id, ResearchStatus.FAILED)
                 return
             
-            # Step 2: Execute research with all agents
             await self.update_session_status(session_id, ResearchStatus.RESEARCHING)
             print(f"[ResearchService] Starting research phase...")
             state = await agent_system.run_research(state)
             print(f"[ResearchService] Research phase complete. {len(state.sections)} sections created.")
             
-            # Save sections
             await self.save_sections(session_id, state.sections)
             
-            # Step 3: Generate PDF
             print(f"[ResearchService] Generating PDF report...")
             try:
                 pdf_path = self.pdf_service.generate_report(
@@ -258,17 +235,14 @@ class ResearchService:
                     session_id=session_id
                 )
                 
-                # Upload to Cloudinary
                 cloudinary_url = self.pdf_service.upload_to_cloudinary(pdf_path, session_id)
                 
-                # Complete session
                 await self.complete_session(session_id, pdf_path, cloudinary_url)
                 print(f"[ResearchService] Research complete! PDF: {pdf_path}")
                 if cloudinary_url:
                     print(f"[ResearchService] Cloudinary URL: {cloudinary_url}")
             except Exception as pdf_error:
                 print(f"[ResearchService] PDF generation failed: {pdf_error}")
-                # Still mark as completed but without PDF
                 await self.update_session_status(session_id, ResearchStatus.COMPLETED)
                 print(f"[ResearchService] Research completed (PDF generation failed)")
             
@@ -285,19 +259,16 @@ class ResearchService:
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
             
-            # Convert status string to enum if needed
             if isinstance(doc.get('status'), str):
                 try:
                     doc['status'] = ResearchStatus(doc['status'])
                 except ValueError:
                     doc['status'] = ResearchStatus.PENDING
             
-            # Convert datetime strings back to datetime objects
             for field in ['created_at', 'updated_at', 'completed_at']:
                 if doc.get(field) and isinstance(doc[field], str):
                     doc[field] = datetime.fromisoformat(doc[field].replace('Z', '+00:00'))
             
-            # Convert agent_update timestamps
             if doc.get('agent_updates'):
                 for update in doc['agent_updates']:
                     if isinstance(update.get('timestamp'), str):
