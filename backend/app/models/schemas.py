@@ -79,6 +79,7 @@ class ResearchSession(BaseModel):
     research_notes: List[ResearchNote] = []
     sections: List[SectionContent] = []
     final_report_path: Optional[str] = None
+    cloudinary_url: Optional[str] = None
     agent_updates: List[AgentUpdate] = []
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

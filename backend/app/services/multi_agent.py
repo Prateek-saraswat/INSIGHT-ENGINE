@@ -21,7 +21,7 @@ class AgentState:
         self.current_section_index: int = 0
         self.needs_revision: bool = False
         self.revision_feedback: str = ""
-        self.max_revisions: int = 2
+        self.max_revisions: int = 1
         self.agent_updates: List[AgentUpdate] = []
 
 
@@ -132,6 +132,8 @@ Respond in JSON format with EXACTLY this structure - no nesting, no extra keys:
         # Perform web research
         search_query = f"{state.topic} {section_title}"
         citations = await self.web_research.research_topic(search_query, num_sources=3)
+        
+        print(f"[ResearcherAgent] Found {len(citations)} citations for section '{section_title}'")
         
         await self.emit_update(
             AgentType.RESEARCHER,
@@ -250,7 +252,7 @@ Respond in JSON format:
     "quality_score": 0-10
 }}
 
-If quality_score >= 7 and no major issues, set has_issues to false."""
+If quality_score >= 5 and no major issues, set has_issues to false."""
         
         response = await self.client.chat.completions.create(
             model=self.model,
@@ -317,7 +319,7 @@ If quality_score >= 7 and no major issues, set has_issues to false."""
                 critique = await self.critique_agent(state, section)
                 print(f"[MultiAgent] Critique Agent: Quality score: {critique.feedback[:100] if critique.feedback else 'No feedback'}...")
                 
-                if critique.has_issues and revision_count < state.max_revisions:
+                if critique.has_issues:
                     # Trigger revision
                     state.needs_revision = True
                     state.revision_feedback = critique.feedback
@@ -340,6 +342,21 @@ If quality_score >= 7 and no major issues, set has_issues to false."""
                     state.needs_revision = False
                     state.revision_feedback = ""
                     print(f"[MultiAgent] Section '{section_title}' APPROVED!")
+            
+            if not section_approved:
+                # Max revisions reached, force approve with note
+                state.sections.append(section)
+                state.needs_revision = False
+                state.revision_feedback = ""
+                await self.emit_update(
+                    AgentType.MANAGER,
+                    "max_revisions_reached",
+                    {
+                        "section": section_title,
+                        "final_feedback": critique.feedback
+                    }
+                )
+                print(f"[MultiAgent] Section '{section_title}' approved after max revisions ({state.max_revisions})")
             
             # Small delay between sections
             await asyncio.sleep(1)

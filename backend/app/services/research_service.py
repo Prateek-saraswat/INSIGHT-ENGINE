@@ -36,12 +36,58 @@ class ResearchService:
         """Retrieve a research session"""
         try:
             data = await self.sessions.find_one({"_id": ObjectId(session_id)})
-            if data:
-                data["_id"] = str(data["_id"])
-                return ResearchSession(**data)
+            if not data:
+                print(f"[ResearchService] Session {session_id} not found in database")
+                return None
+            
+            data["_id"] = str(data["_id"])
+            
+            # Convert status string to enum if needed
+            if isinstance(data.get('status'), str):
+                try:
+                    data['status'] = ResearchStatus(data['status'])
+                except ValueError:
+                    data['status'] = ResearchStatus.PENDING
+            
+            # Convert datetime strings back to datetime objects
+            for field in ['created_at', 'updated_at', 'completed_at']:
+                if data.get(field) and isinstance(data[field], str):
+                    try:
+                        data[field] = datetime.fromisoformat(data[field].replace('Z', '+00:00'))
+                    except (ValueError, TypeError):
+                        data[field] = datetime.utcnow()
+            
+            # Convert agent_update timestamps
+            if data.get('agent_updates'):
+                for update in data['agent_updates']:
+                    if isinstance(update.get('timestamp'), str):
+                        try:
+                            update['timestamp'] = datetime.fromisoformat(update['timestamp'].replace('Z', '+00:00'))
+                        except (ValueError, TypeError):
+                            update['timestamp'] = datetime.utcnow()
+            
+            # Convert section citation datetimes
+            if data.get('sections'):
+                for section in data['sections']:
+                    if section.get('citations'):
+                        for cit in section['citations']:
+                            if isinstance(cit.get('accessed_at'), str):
+                                try:
+                                    cit['accessed_at'] = datetime.fromisoformat(cit['accessed_at'].replace('Z', '+00:00'))
+                                except (ValueError, TypeError):
+                                    cit['accessed_at'] = datetime.utcnow()
+            
+            # Debug: Print section and citation count
+            sections = data.get('sections', [])
+            total_citations = sum(len(s.get('citations', [])) for s in sections)
+            print(f"[ResearchService] Loaded session {session_id}: {len(sections)} sections, {total_citations} citations")
+            
+            return ResearchSession(**data)
         except Exception as e:
-            print(f"Error retrieving session: {e}")
-        return None
+            print(f"Error retrieving session {session_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     async def update_session_status(self, session_id: str, status: ResearchStatus):
         """Update session status"""
@@ -57,10 +103,14 @@ class ResearchService:
     
     async def add_agent_update(self, session_id: str, update: AgentUpdate):
         """Add an agent update to the session"""
+        # Convert datetime to string for MongoDB
+        update_dict = update.dict()
+        update_dict['timestamp'] = update_dict['timestamp'].isoformat()
+        
         await self.sessions.update_one(
             {"_id": ObjectId(session_id)},
             {
-                "$push": {"agent_updates": update.dict()},
+                "$push": {"agent_updates": update_dict},
                 "$set": {"updated_at": datetime.utcnow()}
             }
         )
@@ -93,28 +143,41 @@ class ResearchService:
     
     async def save_sections(self, session_id: str, sections: list):
         """Save completed sections"""
+        # Convert sections to dicts with proper datetime handling
+        sections_data = []
+        for s in sections:
+            section_dict = s.dict()
+            # Convert citation datetimes
+            if section_dict.get('citations'):
+                for cit in section_dict['citations']:
+                    if isinstance(cit.get('accessed_at'), datetime):
+                        cit['accessed_at'] = cit['accessed_at'].isoformat()
+            sections_data.append(section_dict)
+        
         await self.sessions.update_one(
             {"_id": ObjectId(session_id)},
             {
                 "$set": {
-                    "sections": [s.dict() for s in sections],
+                    "sections": sections_data,
                     "updated_at": datetime.utcnow()
                 }
             }
         )
     
-    async def complete_session(self, session_id: str, pdf_path: str):
+    async def complete_session(self, session_id: str, pdf_path: str, cloudinary_url: str = None):
         """Mark session as completed"""
+        update_data = {
+            "status": ResearchStatus.COMPLETED,
+            "final_report_path": pdf_path,
+            "completed_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        if cloudinary_url:
+            update_data["cloudinary_url"] = cloudinary_url
+        
         await self.sessions.update_one(
             {"_id": ObjectId(session_id)},
-            {
-                "$set": {
-                    "status": ResearchStatus.COMPLETED,
-                    "final_report_path": pdf_path,
-                    "completed_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                }
-            }
+            {"$set": update_data}
         )
     
     async def execute_research(
@@ -157,7 +220,7 @@ class ResearchService:
             
             # Save plan and wait for approval
             await self.save_plan(session_id, state.plan.dict())
-            print(f"[ResearchService] Waiting for plan approval...")
+            print(f"[ResearchService] Plan created! Waiting for user approval...")
             
             # Wait for approval (polling approach)
             max_wait = 3600  # 1 hour timeout
@@ -187,17 +250,27 @@ class ResearchService:
             await self.save_sections(session_id, state.sections)
             
             # Step 3: Generate PDF
-            await self.update_session_status(session_id, ResearchStatus.COMPLETED)
             print(f"[ResearchService] Generating PDF report...")
-            pdf_path = self.pdf_service.generate_report(
-                topic=session.topic,
-                sections=state.sections,
-                session_id=session_id
-            )
-            
-            # Complete session
-            await self.complete_session(session_id, pdf_path)
-            print(f"[ResearchService] Research complete! PDF: {pdf_path}")
+            try:
+                pdf_path = self.pdf_service.generate_report(
+                    topic=session.topic,
+                    sections=state.sections,
+                    session_id=session_id
+                )
+                
+                # Upload to Cloudinary
+                cloudinary_url = self.pdf_service.upload_to_cloudinary(pdf_path, session_id)
+                
+                # Complete session
+                await self.complete_session(session_id, pdf_path, cloudinary_url)
+                print(f"[ResearchService] Research complete! PDF: {pdf_path}")
+                if cloudinary_url:
+                    print(f"[ResearchService] Cloudinary URL: {cloudinary_url}")
+            except Exception as pdf_error:
+                print(f"[ResearchService] PDF generation failed: {pdf_error}")
+                # Still mark as completed but without PDF
+                await self.update_session_status(session_id, ResearchStatus.COMPLETED)
+                print(f"[ResearchService] Research completed (PDF generation failed)")
             
         except Exception as e:
             print(f"[ResearchService] ERROR: {e}")
@@ -207,9 +280,37 @@ class ResearchService:
     
     async def get_user_sessions(self, user_id: str, limit: int = 20):
         """Get all sessions for a user"""
-        cursor = self.sessions.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
         sessions = []
+        cursor = self.sessions.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
         async for doc in cursor:
             doc["_id"] = str(doc["_id"])
+            
+            # Convert status string to enum if needed
+            if isinstance(doc.get('status'), str):
+                try:
+                    doc['status'] = ResearchStatus(doc['status'])
+                except ValueError:
+                    doc['status'] = ResearchStatus.PENDING
+            
+            # Convert datetime strings back to datetime objects
+            for field in ['created_at', 'updated_at', 'completed_at']:
+                if doc.get(field) and isinstance(doc[field], str):
+                    doc[field] = datetime.fromisoformat(doc[field].replace('Z', '+00:00'))
+            
+            # Convert agent_update timestamps
+            if doc.get('agent_updates'):
+                for update in doc['agent_updates']:
+                    if isinstance(update.get('timestamp'), str):
+                        update['timestamp'] = datetime.fromisoformat(update['timestamp'].replace('Z', '+00:00'))
+            
             sessions.append(ResearchSession(**doc))
         return sessions
+    
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a research session"""
+        try:
+            result = await self.sessions.delete_one({"_id": ObjectId(session_id)})
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting session {session_id}: {e}")
+            return False

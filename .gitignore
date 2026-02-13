@@ -59,3 +59,5 @@ htmlcov/
 *.pyc
 .next/
 out/
+ARCHITECTURE.md
+PROJECT_SUMMARY.md

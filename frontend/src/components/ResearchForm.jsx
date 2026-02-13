@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { FileText, Sparkles } from 'lucide-react';
+import { FileText, Sparkles, Lightbulb } from 'lucide-react';
 
 const ResearchForm = ({ onSubmit, loading }) => {
   const [topic, setTopic] = useState('');
   const [constraints, setConstraints] = useState('');
+  const [focusedField, setFocusedField] = useState('');
 
   const exampleTopics = [
     'Impact of artificial intelligence on healthcare diagnostics',
@@ -27,66 +28,59 @@ const ResearchForm = ({ onSubmit, loading }) => {
   };
 
   return (
-    <div className="card max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <FileText className="w-8 h-8 text-primary-600" />
-        <h2 className="text-2xl font-bold">Start New Research</h2>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Research Topic *
-          </label>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Research Topic */}
+      <div className="relative">
+        <label className="block text-sm font-medium text-slate-600 mb-2">
+          Research Topic *
+        </label>
+        <div className="relative">
           <textarea
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
+            onFocus={() => setFocusedField('topic')}
+            onBlur={() => setFocusedField('')}
             placeholder="Enter a complex research topic you'd like to explore..."
-            className="input-field h-32 resize-none"
+            className="w-full px-4 py-4 bg-white border-2 border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-all duration-300 h-32 resize-none"
             required
             disabled={loading}
           />
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Constraints (Optional)
-          </label>
-          <input
-            type="text"
-            value={constraints}
-            onChange={(e) => setConstraints(e.target.value)}
-            placeholder="e.g., Focus on last 5 years, exclude specific sources..."
-            className="input-field"
-            disabled={loading}
-          />
+     
+
+      {/* Example Topics */}
+      <div className="p-4 bg-white border border-blue-100 rounded-xl">
+        <div className="flex items-center gap-2 mb-3">
+          <Lightbulb className="w-4 h-4 text-blue-500" />
+          <p className="text-sm font-medium text-slate-600">Example Topics:</p>
         </div>
-
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm font-medium text-gray-700 mb-2">Example Topics:</p>
-          <div className="space-y-2">
-            {exampleTopics.map((example, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => loadExample(example)}
-                className="text-sm text-primary-600 hover:text-primary-700 block text-left hover:underline"
-                disabled={loading}
-              >
-                • {example}
-              </button>
-            ))}
-          </div>
+        <div className="space-y-2">
+          {exampleTopics.map((example, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => loadExample(example)}
+              className="text-sm text-slate-500 hover:text-blue-600 block text-left transition-colors duration-200 disabled:opacity-50"
+              disabled={loading}
+            >
+              • {example}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <button
-          type="submit"
-          disabled={loading || !topic.trim()}
-          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+      {/* Submit Button */}
+      <button
+        type="submit"
+        disabled={loading || !topic.trim()}
+        className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 transition-all duration-300 disabled:opacity-70"
+      >
+        <span className="flex items-center justify-center gap-2">
           {loading ? (
             <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               Starting Research...
             </>
           ) : (
@@ -95,9 +89,9 @@ const ResearchForm = ({ onSubmit, loading }) => {
               Start Research
             </>
           )}
-        </button>
-      </form>
-    </div>
+        </span>
+      </button>
+    </form>
   );
 };
 

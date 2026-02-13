@@ -10,11 +10,7 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 openai==1.10.0
-langchain==0.1.4
-langchain-openai==0.0.3
-langgraph==0.0.20
 httpx==0.26.0
 beautifulsoup4==4.12.3
-requests==2.31.0
 reportlab==4.0.9
-pypdf==3.17.4
+cloudinary==1.41.0

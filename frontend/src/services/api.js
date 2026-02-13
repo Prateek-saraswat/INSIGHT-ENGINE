@@ -10,12 +10,65 @@ const api = axios.create({
   },
 });
 
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export const authApi = {
+  login: async (email, password) => {
+    const response = await api.post('/api/auth/login', { email, password });
+    return response.data;
+  },
+  
+  register: async (email, username, password, confirm_password) => {
+    const response = await api.post('/api/auth/register', {
+      email,
+      username,
+      password,
+      confirm_password
+    });
+    return response.data;
+  },
+  
+  logout: async () => {
+    await api.post('/api/auth/logout');
+  },
+  
+  getMe: async () => {
+    const token = localStorage.getItem('token');
+    const response = await api.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  },
+};
+
 export const researchApi = {
   // Start a new research session
-  startResearch: async (topic, userId, constraints = null, scope = null) => {
+  startResearch: async (topic, user_id, constraints = null, scope = null) => {
     const response = await api.post('/api/research/start', {
       topic,
-      user_id: userId,
+      user_id,
       constraints,
       scope,
     });
@@ -38,7 +91,7 @@ export const researchApi = {
     return response.data;
   },
 
-  // Get user's sessions
+  // Get user's sessions (requires auth)
   getUserSessions: async (userId) => {
     const response = await api.get(`/api/research/sessions/${userId}`);
     return response.data;
@@ -46,11 +99,19 @@ export const researchApi = {
 
   // Download report
   downloadReport: (sessionId) => {
+    const token = localStorage.getItem('token');
     return `${API_BASE_URL}/api/research/download/${sessionId}`;
+  },
+
+  // Delete a research session
+  deleteSession: async (sessionId) => {
+    const response = await api.delete(`/api/research/session/${sessionId}`);
+    return response.data;
   },
 
   // Create WebSocket connection
   createWebSocket: (sessionId) => {
+    const token = localStorage.getItem('token');
     return new WebSocket(`${WS_BASE_URL}/api/research/stream/${sessionId}`);
   },
 };

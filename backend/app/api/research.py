@@ -89,18 +89,33 @@ async def get_user_sessions(
     return sessions
 
 
+@router.delete("/session/{session_id}")
+async def delete_session(
+    session_id: str,
+    service: ResearchService = Depends(get_research_service)
+):
+    """Delete a research session"""
+    deleted = await service.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"message": "Session deleted successfully"}
+
+
 @router.get("/download/{session_id}")
 async def download_report(
     session_id: str,
     service: ResearchService = Depends(get_research_service)
 ):
-    """Download the final PDF report"""
+    """Download the PDF report for a research session"""
     session = await service.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    if not session.final_report_path or not os.path.exists(session.final_report_path):
-        raise HTTPException(status_code=404, detail="Report not found")
+    if session.status != "completed" or not session.final_report_path:
+        raise HTTPException(status_code=404, detail="Report not available")
+    
+    if not os.path.exists(session.final_report_path):
+        raise HTTPException(status_code=404, detail="Report file not found")
     
     return FileResponse(
         path=session.final_report_path,

@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from .core.config import settings
 from .core.database import Database
-from .api import research
+from .api import research, auth
 
 
 @asynccontextmanager
@@ -23,6 +24,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Exception handler for validation errors
+@app.exception_handler(Exception)
+async def validation_exception_handler(request, exc):
+    print(f"Validation error: {exc}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc)}
+    )
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +44,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(research.router)
+app.include_router(auth.router)
 
 
 @app.get("/")
